@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAST Platform — Dashboard Executivo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1c1f26; --muted: #6b7280;
+    --border: #e5e7eb; --accent: #3b82f6; --critical: #ef4444;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161718; --card: #212224; --text: #f1f2f4; --muted: #9ca3af; --border: #33363a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex;
+           justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  h1 { margin: 0; font-size: 1.3rem; }
+  .muted { color: var(--muted); font-size: .85rem; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 28px 48px; display: grid; gap: 20px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  .card h2 { margin: 0 0 14px; font-size: .85rem; color: var(--muted); font-weight: 600;
+             text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .value { font-size: 2rem; font-weight: 700; }
+  .sev-wrap { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+  .donut { position: relative; width: 170px; height: 170px; border-radius: 50%;
+           background: var(--border); flex-shrink: 0; }
+  .donut-hole { position: absolute; inset: 28px; border-radius: 50%; background: var(--card);
+                display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .donut-hole strong { font-size: 1.6rem; }
+  .legend div { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: .92rem; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .bar-row { margin: 12px 0; }
+  .bar-label { display: flex; justify-content: space-between; gap: 12px; font-size: .88rem; margin-bottom: 4px; }
+  .bar-label span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { height: 10px; background: var(--border); border-radius: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 6px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem;
+           font-weight: 600; color: #111; }
+  details summary { cursor: pointer; color: var(--accent); }
+  details p { margin: 8px 0 0; }
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+        overflow-x: auto; white-space: pre-wrap; margin: 8px 0 0; font-size: .82rem; }
+  svg { color: var(--text); }
+  svg text { fill: var(--muted); font-size: 11px; }
+  .empty { color: var(--muted); padding: 12px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡️ Plataforma SAST — Dashboard Executivo</h1>
+  <span class="muted" id="updated">Carregando…</span>
+</header>
+
+<main>
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid-2">
+    <div class="card">
+      <h2>Severidade</h2>
+      <div class="sev-wrap">
+        <div class="donut" id="donut">
+          <div class="donut-hole"><strong id="donut-total">0</strong><span class="muted">violações</span></div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Tendência de falhas (por semana)</h2>
+      <div id="trend"></div>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card">
+      <h2>Top 5 arquivos críticos</h2>
+      <div id="top-files"></div>
+    </div>
+    <div class="card">
+      <h2>Sobre os dados</h2>
+      <p class="muted">Severidade das barras e do gráfico: definida pelas regras determinísticas do motor.
+      A classificação da IA (LLM local) aparece na tabela abaixo, junto da explicação e da sugestão de correção.
+      As métricas acumulam todo o histórico de scans salvo no PostgreSQL.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Últimas violações detectadas</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Severidade</th><th>Arquivo:linha</th><th>Regra (CWE)</th>
+            <th>Severidade IA</th><th>Falso positivo?</th><th>Análise da IA</th>
+          </tr>
+        </thead>
+        <tbody id="findings"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  const SEVERITIES = [["critical", "Crítico"], ["high", "Alto"], ["medium", "Médio"], ["low", "Baixo"]];
+  const COLORS = { critical: "#ef4444", high: "#f97316", medium: "#facc15", low: "#3b82f6" };
+
+  // Todo texto vindo da API entra na página com textContent (nunca innerHTML):
+  // nomes de arquivo e mensagens têm origem em uploads de terceiros (evita XSS armazenado).
+  function el(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function badge(severity) {
+    const b = el("span", severity || "-", "badge");
+    b.style.background = COLORS[severity] || "#9ca3af";
+    return b;
+  }
+
+  function renderKpis(k) {
+    const items = [
+      ["Violações registradas", k.total],
+      ["Críticas", k.critical],
+      ["Arquivos analisados", k.files],
+      ["Possíveis falsos positivos (IA)", k.ai_false_positives],
+    ];
+    const box = document.getElementById("kpis");
+    box.replaceChildren();
+    items.forEach(([label, value]) => {
+      const card = el("div", null, "card kpi");
+      card.append(el("h2", label), el("div", value, "value"));
+      box.append(card);
+    });
+  }
+
+  function renderSeverity(bySeverity) {
+    const total = Object.values(bySeverity).reduce((a, b) => a + b, 0);
+    const donut = document.getElementById("donut");
+    const legend = document.getElementById("legend");
+    document.getElementById("donut-total").textContent = total;
+    legend.replaceChildren();
+
+    let acc = 0;
+    const stops = [];
+    SEVERITIES.forEach(([key, label]) => {
+      const count = bySeverity[key] || 0;
+      const pct = total ? (count / total) * 100 : 0;
+      if (count > 0) stops.push(`${COLORS[key]} ${acc}% ${acc + pct}%`);
+      acc += pct;
+
+      const row = el("div");
+      const dot = el("span", null, "dot");
+      dot.style.background = COLORS[key];
+      row.append(dot, el("span", `${label}: ${count} (${pct.toFixed(0)}%)`));
+      legend.append(row);
+    });
+    donut.style.background = stops.length ? `conic-gradient(${stops.join(", ")})` : "var(--border)";
+  }
+
+  function renderTrend(points) {
+    const box = document.getElementById("trend");
+    box.replaceChildren();
+    if (!points.length) { box.append(el("div", "Sem dados ainda.", "empty")); return; }
+
+    const NS = "http://www.w3.org/2000/svg";
+    const W = 600, H = 220, PAD = { l: 40, r: 16, t: 16, b: 32 };
+    const max = Math.max(...points.map(p => p.count), 1);
+    const x = i => points.length === 1 ? W / 2 : PAD.l + (i * (W - PAD.l - PAD.r)) / (points.length - 1);
+    const y = v => H - PAD.b - (v / max) * (H - PAD.t - PAD.b);
+    const mk = (name, attrs) => {
+      const n = document.createElementNS(NS, name);
+      Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+      return n;
+    };
+
+    const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%" });
+    [0, 0.5, 1].forEach(f => {
+      const gy = y(max * f);
+      svg.append(mk("line", { x1: PAD.l, x2: W - PAD.r, y1: gy, y2: gy, stroke: "currentColor", "stroke-opacity": 0.12 }));
+      const t = mk("text", { x: PAD.l - 6, y: gy + 4, "text-anchor": "end" });
+      t.textContent = Math.round(max * f);
+      svg.append(t);
+    });
+
+    if (points.length > 1) {
+      svg.append(mk("polyline", {
+        points: points.map((p, i) => `${x(i)},${y(p.count)}`).join(" "),
+        fill: "none", stroke: "#3b82f6", "stroke-width": 2.5, "stroke-linejoin": "round",
+      }));
+    }
+    points.forEach((p, i) => {
+      const c = mk("circle", { cx: x(i), cy: y(p.count), r: 4, fill: "#3b82f6" });
+      const title = mk("title", {});
+      title.textContent = `Semana de ${p.period}: ${p.count} violações`;
+      c.append(title);
+      svg.append(c);
+      const lbl = mk("text", { x: x(i), y: H - 10, "text-anchor": "middle" });
+      lbl.textContent = `${p.period.slice(8, 10)}/${p.period.slice(5, 7)}`;
+      svg.append(lbl);
+    });
+    box.append(svg);
+  }
+
+  function renderTopFiles(files) {
+    const box = document.getElementById("top-files");
+    box.replaceChildren();
+    if (!files.length) { box.append(el("div", "Nenhum arquivo analisado ainda.", "empty")); return; }
+    const max = Math.max(...files.map(f => f.total), 1);
+    files.forEach(f => {
+      const row = el("div", null, "bar-row");
+      const label = el("div", null, "bar-label");
+      label.append(el("span", f.filename), el("span", `${f.total} falhas (${f.critical} críticas)`));
+      const track = el("div", null, "bar-track");
+      const fill = el("div", null, "bar-fill");
+      fill.style.width = `${(f.total / max) * 100}%`;
+      track.append(fill);
+      row.append(label, track);
+      box.append(row);
+    });
+  }
+
+  function aiCell(r) {
+    const cell = document.createElement("td");
+    if (!r.ai_explanation && !r.ai_remediation) { cell.append("—"); return cell; }
+    const details = el("details");
+    details.append(el("summary", "Ver análise"));
+    if (r.ai_explanation) details.append(el("p", r.ai_explanation));
+    if (r.ai_remediation) details.append(el("pre", r.ai_remediation));
+    cell.append(details);
+    return cell;
+  }
+
+  function renderFindings(rows) {
+    const body = document.getElementById("findings");
+    body.replaceChildren();
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = el("td", "Nenhum scan registrado ainda. Envie um arquivo para /scan.", "empty");
+      td.colSpan = 6;
+      tr.append(td);
+      body.append(tr);
+      return;
+    }
+    rows.forEach(r => {
+      const cell = (...nodes) => { const td = document.createElement("td"); td.append(...nodes); return td; };
+      const fp = r.ai_false_positive === null ? "—" : (r.ai_false_positive ? "Sim" : "Não");
+      const tr = document.createElement("tr");
+      tr.append(
+        cell(badge(r.severity)),
+        cell(`${r.filename}:${r.line}`),
+        cell(`${r.rule_id} (${r.cwe})`),
+        cell(r.ai_severity ? badge(r.ai_severity) : "—"),
+        cell(fp),
+        aiCell(r),
+      );
+      body.append(tr);
+    });
+  }
+
+  async function load() {
+    const status = document.getElementById("updated");
+    try {
+      const res = await fetch("/api/dashboard/summary");
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      renderKpis(data.kpis);
+      renderSeverity(data.by_severity);
+      renderTrend(data.trend);
+      renderTopFiles(data.top_files);
+      renderFindings(data.latest_findings);
+      status.textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-BR");
+    } catch (err) {
+      status.textContent = "Falha ao carregar os dados";
+    }
+  }
+
+  load();
+  setInterval(load, 30000);
+</script>
+</body>
+</html>
