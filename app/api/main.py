@@ -9,10 +9,12 @@ from app.engine.parser import scan_file
 from app.ai.ollama_client import analyze_issue, build_snippet
 from app.api.database import Base, engine, get_db
 from app.api.models import ScanResult
+from app.api.dashboard import router as dashboard_router
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SAST Platform API")
+app.include_router(dashboard_router)
 
 
 @app.get("/health")
