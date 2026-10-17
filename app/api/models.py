@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from sqlalchemy.sql import func
 from app.api.database import Base
 
@@ -13,4 +13,8 @@ class ScanResult(Base):
     message = Column(String)
     line = Column(Integer)
     severity = Column(String, index=True)
+    ai_severity = Column(String, nullable=True)
+    ai_false_positive = Column(Boolean, nullable=True)
+    ai_explanation = Column(Text, nullable=True)
+    ai_remediation = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
