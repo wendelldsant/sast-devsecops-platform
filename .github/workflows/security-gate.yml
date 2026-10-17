@@ -1,0 +1,33 @@
+name: SAST Security Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sast-scan:
+    name: sast-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configura Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Executa o scanner SAST (Security Gate)
+        run: python scan_ci.py . --exclude tests --fail-on critical --report sast-report.json
+
+      - name: Publica o relatório
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-report
+          path: sast-report.json
