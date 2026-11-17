@@ -1,5 +1,6 @@
 import ast
 from app.engine.rules import SecurityVisitor
+from app.engine.pii_taint import PIITaintVisitor
 from app.engine.taint import TaintVisitor
 
 
@@ -15,5 +16,8 @@ def scan_file(filepath: str) -> list[dict]:
     taint_visitor = TaintVisitor()
     taint_visitor.visit(tree)
 
-    all_issues = visitor.issues + taint_visitor.issues
+    pii_taint_visitor = PIITaintVisitor()
+    pii_taint_visitor.visit(tree)
+
+    all_issues = visitor.issues + taint_visitor.issues + pii_taint_visitor.issues
     return [issue.to_dict() for issue in all_issues]

@@ -4,7 +4,7 @@ from app.pii import find_pii
 
 
 class SecurityIssue:
-    def __init__(self, rule_id, cwe, message, line, severity, pii_type=None, confidence=None):
+    def __init__(self, rule_id, cwe, message, line, severity, pii_type=None, confidence=None, sink=None):
         self.rule_id = rule_id
         self.cwe = cwe
         self.message = message
@@ -12,6 +12,7 @@ class SecurityIssue:
         self.severity = severity
         self.pii_type = pii_type  # só nas regras de PII
         self.confidence = confidence
+        self.sink = sink  # destino do vazamento (só no PII_LEAK)
 
     def to_dict(self):
         data = {
@@ -24,6 +25,8 @@ class SecurityIssue:
         if self.pii_type:
             data["pii_type"] = self.pii_type
             data["confidence"] = self.confidence
+        if self.sink:
+            data["sink"] = self.sink
         return data
 
 

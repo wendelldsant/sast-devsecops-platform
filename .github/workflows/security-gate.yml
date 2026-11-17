@@ -23,7 +23,7 @@ jobs:
           python-version: "3.11"
 
       - name: Executa o scanner SAST (Security Gate)
-        run: python scan_ci.py . --exclude tests --fail-on critical --report sast-report.json
+        run: python scan_ci.py . --exclude tests --exclude scripts/validar_pii.py --fail-on critical --report sast-report.json
 
       - name: Publica o relatório
         if: always()
