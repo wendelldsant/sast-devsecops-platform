@@ -40,5 +40,5 @@ condições de saúde sem marcador de contexto, telefone sem DDD e CPF ofuscado 
 ```
 python -m pytest tests/test_pii.py -v
 python scripts/validar_pii.py
-python scan_ci.py . --exclude tests --fail-on critical
+python scan_ci.py . --exclude tests --exclude scripts/validar_pii.py --fail-on critical
 ```

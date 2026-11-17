@@ -1,0 +1,21 @@
+
+=== ANTES (vulnerável): tests/prototipo_zeladoria/vulneravel.py ===
+  L14  PII_HARDCODED high     CPF          destino=código       confiança=alta
+  L28  PII_LEAK      critical TEXTO_LIVRE  destino=log          confiança=alta
+        fluxo: ocorrencia.descricao (L28) → logger.info() (L28)
+  L32  PII_LEAK      critical TELEFONE     destino=print        confiança=alta
+        fluxo: ocorrencia.telefone (L31) → contato (L31) → print() (L32)
+  L36  PII_LEAK      critical CPF          destino=arquivo      confiança=alta
+        fluxo: ocorrencia.cpf (L36) → arquivo.write() (L36)
+  L41  PII_LEAK      critical CPF          destino=resposta_api confiança=alta
+        fluxo: ocorrencia.cpf (L41) → return (resposta da API) (L41)
+  L48  PII_LEAK      critical SENHA        destino=excecao      confiança=alta
+        fluxo: parâmetro senha (L45) → HTTPException() (L48)
+  total: 6 | bloqueantes (critical): 5 | Security Gate: REPROVADO
+
+=== DEPOIS (corrigido): tests/prototipo_zeladoria/corrigido.py ===
+  nenhum vazamento de PII encontrado
+  total: 0 | bloqueantes (critical): 0 | Security Gate: APROVADO
+
+Resumo: 5 vazamentos em 5 destinos (arquivo, excecao, log, print, resposta_api) antes; 0 depois.
+RESULTADO: APROVADO

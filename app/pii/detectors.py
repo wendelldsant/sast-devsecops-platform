@@ -18,6 +18,10 @@ PII_META = {
     "EMAIL": {"category": "comum", "weight": 1, "cwe": "CWE-359", "severity": "medium"},
     "SAUDE": {"category": "sensivel", "weight": 3, "cwe": "CWE-359", "severity": "critical"},
     "SENHA": {"category": "credencial", "weight": 3, "cwe": "CWE-798", "severity": "high"},
+    # Tipos inferidos pelo taint a partir do NOME do campo (sem detector de texto):
+    # texto livre pode conter qualquer PII; um objeto inteiro carrega vários campos de uma vez.
+    "TEXTO_LIVRE": {"category": "livre", "weight": 2, "cwe": "CWE-200", "severity": "high"},
+    "MULTIPLOS": {"category": "misto", "weight": 3, "cwe": "CWE-200", "severity": "critical"},
 }
 
 CONFIDENCE_RANK = {"alta": 2, "media": 1}
