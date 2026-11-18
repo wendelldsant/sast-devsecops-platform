@@ -1,0 +1,49 @@
+Alertas ao cidadão para vulneravel.py (IA ligada: Ollama)
+
+--- L14 PII_HARDCODED | CPF | destino=código
+TÉCNICO : Dado pessoal (CPF) fixo no código, confiança alta. O valor não é exibido neste relatório.
+CIDADÃO : [ALTO | 4 pts | fonte=padrao | 28.9s]
+  título : Seu CPF pode ficar exposto
+  risco  : O sistema deixa o seu CPF no código do sistema, que fica guardado e compartilhado entre desenvolvedores. Isso aumenta o risco de golpes e fraudes feitos em seu nome.
+  ação   : A equipe do sistema deve ocultar esse dado antes de guardá-lo ou mostrá-lo. Enquanto isso, evite digitar dados pessoais em campos de texto livre.
+  (texto do LLM descartado: não cita o destino real)
+
+--- L28 PII_LEAK | TEXTO_LIVRE | destino=log
+TÉCNICO : Dado pessoal (TEXTO_LIVRE) chega a 'logger.info()' sem sanitização.
+CIDADÃO : [MEDIO | 2 pts | fonte=padrao | 46.6s]
+  título : Dados pessoais no seu texto podem ficar expostos
+  risco  : O sistema deixa o texto que você escreveu (que pode conter dados pessoais) em um registro interno do sistema, que outras pessoas e sistemas podem ler. Isso aumenta o risco de dados pessoais digitados no texto serem vistos por quem não deveria.
+  ação   : A equipe do sistema deve ocultar esse dado antes de guardá-lo ou mostrá-lo. Enquanto isso, evite digitar dados pessoais em campos de texto livre.
+  (texto do LLM descartado: não cita o dado)
+
+--- L32 PII_LEAK | TELEFONE | destino=print
+TÉCNICO : Dado pessoal (TELEFONE) chega a 'print()' sem sanitização.
+CIDADÃO : [BAIXO | 1 pts | fonte=padrao | 28.5s]
+  título : Seu telefone pode ficar exposto
+  risco  : O sistema deixa o seu telefone em um registro interno do sistema, que outras pessoas e sistemas podem ler. Isso aumenta o risco de ligações e mensagens de golpistas.
+  ação   : A equipe do sistema deve ocultar esse dado antes de guardá-lo ou mostrá-lo. Enquanto isso, evite digitar dados pessoais em campos de texto livre.
+  (texto do LLM descartado: não cita o destino real)
+
+--- L36 PII_LEAK | CPF | destino=arquivo
+TÉCNICO : Dado pessoal (CPF) chega a 'arquivo.write()' sem sanitização.
+CIDADÃO : [ALTO | 4 pts | fonte=ia | 26.5s]
+  título : Seu CPF pode ficar exposto
+  risco  : Seu CPF foi encontrado em um arquivo de texto sem proteção. Isso significa que alguém poderia usá-lo para acessar suas informações pessoais.
+  ação   : A equipe vai apagar o CPF do arquivo e tomar medidas para evitar que isso aconteça novamente.
+
+--- L41 PII_LEAK | CPF | destino=resposta_api
+TÉCNICO : Dado pessoal (CPF) chega a 'return (resposta da API)' sem sanitização.
+CIDADÃO : [ALTO | 6 pts | fonte=ia | 24.0s]
+  título : Seu CPF pode ficar exposto
+  risco  : Seu CPF foi enviado na resposta do aplicativo. Quem vir essa resposta poderia usá-lo para golpes.
+  ação   : A equipe vai tomar medidas para evitar que isso aconteça novamente.
+
+--- L48 PII_LEAK | SENHA | destino=excecao
+TÉCNICO : Dado pessoal (SENHA) chega a 'HTTPException()' sem sanitização.
+CIDADÃO : [CRITICO | 9 pts | fonte=padrao | 26.5s]
+  título : Sua senha pode ficar exposta
+  risco  : O sistema deixa a sua senha em uma mensagem de erro exibida na tela. Isso aumenta o risco de alguém entrar na sua conta e se passar por você.
+  ação   : A equipe do sistema deve ocultar esse dado antes de guardá-lo ou mostrá-lo. Se você digitou sua senha em algum lugar, troque-a agora.
+  (texto do LLM descartado: não cita o destino real)
+
+Resumo: 6 alertas | fonte: {'padrao': 4, 'ia': 2}
