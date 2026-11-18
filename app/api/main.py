@@ -9,8 +9,9 @@ from app.engine.parser import scan_file
 from app.ai.citizen_alert import build_citizen_alert
 from app.ai.ollama_client import analyze_issue, build_snippet
 from app.api.database import Base, engine, ensure_columns, get_db
-from app.api.models import ScanResult
+from app.api.models import ScanResult, ScanRun
 from app.api.dashboard import router as dashboard_router
+from app.risk import citizen_risk_level, citizen_risk_score, weighted_points
 
 Base.metadata.create_all(bind=engine)
 ensure_columns(engine)
@@ -44,6 +45,11 @@ async def scan_uploaded_file(
     finally:
         os.remove(tmp_path)
 
+    run = ScanRun(filename=file.filename, issues_found=len(issues))
+    db.add(run)
+    db.flush()  # gera o id da execução, que liga os achados ao scan
+    pii_points, pii_count = 0.0, 0
+
     for issue in issues:
         # Achados de PII nunca mandam o trecho de código ao LLM: a linha pode conter a própria PII.
         if use_ai and issue["rule_id"] not in PII_RULES:
@@ -56,7 +62,12 @@ async def scan_uploaded_file(
         alert = await run_in_threadpool(build_citizen_alert, issue, use_ai)
         issue["citizen_alert"] = alert
 
+        if issue["rule_id"] in PII_RULES:
+            pii_count += 1
+            pii_points += weighted_points(alert["pontos"], issue.get("confidence"))
+
         db.add(ScanResult(
+            scan_id=run.id,
             filename=file.filename,
             rule_id=issue["rule_id"],
             cwe=issue["cwe"],
@@ -77,10 +88,18 @@ async def scan_uploaded_file(
             alert_points=alert["pontos"],
             alert_source=alert["fonte"],
         ))
+    run.pii_findings = pii_count
+    run.risk_points = pii_points
+    run.risk_score = citizen_risk_score(pii_points)
     db.commit()
 
     return {
         "filename": file.filename,
         "issues_found": len(issues),
+        "citizen_risk": {
+            "score": run.risk_score,
+            "nivel": citizen_risk_level(run.risk_score),
+            "pontos": round(pii_points, 1),
+        },
         "issues": issues,
     }

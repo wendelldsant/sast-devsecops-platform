@@ -187,6 +187,10 @@ def test_ensure_columns_e_idempotente():
 def client(monkeypatch):
     from fastapi.testclient import TestClient
     from app.api import main
+    from app.api.models import ScanResult, ScanRun
+    with main.engine.begin() as conn:  # banco limpo: outros testes de API compartilham o mesmo SQLite
+        conn.execute(ScanResult.__table__.delete())
+        conn.execute(ScanRun.__table__.delete())
     return TestClient(main.app), main
 
 

@@ -22,6 +22,7 @@ NEW_COLUMNS = {
     "pii_type": "VARCHAR", "sink": "VARCHAR", "confidence": "VARCHAR",
     "alert_title": "VARCHAR", "alert_risk": "TEXT", "alert_action": "TEXT",
     "alert_level": "VARCHAR", "alert_points": "INTEGER", "alert_source": "VARCHAR",
+    "scan_id": "INTEGER",
 }
 
 
