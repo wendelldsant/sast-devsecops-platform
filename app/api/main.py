@@ -6,12 +6,16 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.engine.parser import scan_file
+from app.ai.citizen_alert import build_citizen_alert
 from app.ai.ollama_client import analyze_issue, build_snippet
-from app.api.database import Base, engine, get_db
+from app.api.database import Base, engine, ensure_columns, get_db
 from app.api.models import ScanResult
 from app.api.dashboard import router as dashboard_router
 
 Base.metadata.create_all(bind=engine)
+ensure_columns(engine)
+
+PII_RULES = {"PII_LEAK", "PII_HARDCODED"}
 
 app = FastAPI(title="SAST Platform API")
 app.include_router(dashboard_router)
@@ -41,12 +45,16 @@ async def scan_uploaded_file(
         os.remove(tmp_path)
 
     for issue in issues:
-        if use_ai:
+        # Achados de PII nunca mandam o trecho de código ao LLM: a linha pode conter a própria PII.
+        if use_ai and issue["rule_id"] not in PII_RULES:
             snippet = build_snippet(source_code, issue["line"])
             # chamada bloqueante (HTTP + LLM) roda em thread para não travar a API
             ai_result = await run_in_threadpool(analyze_issue, snippet, issue)
             if ai_result:
                 issue.update(ai_result)
+
+        alert = await run_in_threadpool(build_citizen_alert, issue, use_ai)
+        issue["citizen_alert"] = alert
 
         db.add(ScanResult(
             filename=file.filename,
@@ -59,6 +67,15 @@ async def scan_uploaded_file(
             ai_false_positive=issue.get("ai_false_positive"),
             ai_explanation=issue.get("ai_explanation"),
             ai_remediation=issue.get("ai_remediation"),
+            pii_type=issue.get("pii_type"),
+            sink=issue.get("sink"),
+            confidence=issue.get("confidence"),
+            alert_title=alert["titulo"],
+            alert_risk=alert["risco"],
+            alert_action=alert["o_que_fazer"],
+            alert_level=alert["nivel"],
+            alert_points=alert["pontos"],
+            alert_source=alert["fonte"],
         ))
     db.commit()
 
