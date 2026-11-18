@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SAST Platform — Dashboard Executivo</title>
+<title>SAST Platform — Dashboard Executivo e Risco Cidadão</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1c1f26; --muted: #6b7280;
@@ -52,6 +52,16 @@
   svg { color: var(--text); }
   svg text { fill: var(--muted); font-size: 11px; }
   .empty { color: var(--muted); padding: 12px 0; }
+  .risk-wrap { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+  .gauge { position: relative; width: 190px; height: 190px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .gauge-hole { position: absolute; inset: 24px; border-radius: 50%; background: var(--card); display: flex;
+                flex-direction: column; align-items: center; justify-content: center; }
+  .gauge-hole strong { font-size: 2.6rem; line-height: 1; }
+  .risk-info { flex: 1; min-width: 260px; }
+  .risk-info p { margin: 6px 0; }
+  .formula { font-family: ui-monospace, Consolas, monospace; font-size: .82rem; background: var(--bg);
+             border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
+  .src-ia { background: #a78bfa; } .src-padrao { background: #9ca3af; }
 </style>
 </head>
 <body>
@@ -61,6 +71,39 @@
 </header>
 
 <main>
+  <section class="card" id="risk-card">
+    <h2>Risco Cidadão</h2>
+    <div class="risk-wrap">
+      <div class="gauge" id="gauge">
+        <div class="gauge-hole"><strong id="risk-score">0</strong><span class="muted" id="risk-level">sem dados</span></div>
+      </div>
+      <div class="risk-info" id="risk-info"></div>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="card"><h2>Exposição por tipo de dado</h2><div id="risk-types"></div></div>
+    <div class="card"><h2>Exposição por destino</h2><div id="risk-sinks"></div></div>
+  </section>
+
+  <section class="card">
+    <h2>Risco Cidadão por scan (evolução)</h2>
+    <div id="risk-timeline"></div>
+  </section>
+
+  <section class="card">
+    <h2>Maiores riscos para o cidadão (alertas)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Nível</th><th>Pontos</th><th>Dado → destino</th><th>Arquivo:linha</th><th>Confiança</th><th>Alerta ao cidadão</th></tr>
+        </thead>
+        <tbody id="risk-findings"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <h2 class="muted" style="margin:8px 0 -8px">Segurança do código (SAST)</h2>
   <section class="kpis" id="kpis"></section>
 
   <section class="grid-2">
@@ -267,8 +310,148 @@
     });
   }
 
+  // ---- Risco Cidadão (Etapa 4)
+  const RISK_COLORS = { nenhum: "#22c55e", baixo: "#3b82f6", medio: "#facc15", alto: "#f97316", critico: "#ef4444" };
+  const RISK_LABELS = { nenhum: "sem exposição", baixo: "baixo", medio: "médio", alto: "alto", critico: "crítico" };
+  const TYPE_LABELS = { CPF: "CPF", TELEFONE: "Telefone", EMAIL: "E-mail", SENHA: "Senha", SAUDE: "Saúde",
+                        TEXTO_LIVRE: "Texto livre", MULTIPLOS: "Vários campos", OUTRO: "Outro" };
+  const SINK_LABELS = { log: "Log", print: "Print (console)", arquivo: "Arquivo", excecao: "Mensagem de erro",
+                        resposta_api: "Resposta da API", codigo: "Código-fonte" };
+
+  function riskBadge(level) {
+    const b = el("span", RISK_LABELS[level] || level || "-", "badge");
+    b.style.background = RISK_COLORS[level] || "#9ca3af";
+    return b;
+  }
+
+  function renderRisk(data) {
+    const r = data.risk;
+    const color = RISK_COLORS[r.level] || "#9ca3af";
+    document.getElementById("risk-score").textContent = r.score;
+    document.getElementById("risk-level").textContent = RISK_LABELS[r.level] || r.level;
+    document.getElementById("gauge").style.background = r.score > 0
+      ? `conic-gradient(${color} 0% ${r.score}%, var(--border) ${r.score}% 100%)` : "var(--border)";
+
+    const info = document.getElementById("risk-info");
+    info.replaceChildren();
+    if (!r.files) {
+      info.append(el("p", "Nenhum scan registrado ainda. Envie um arquivo para /scan.", "muted"));
+    } else {
+      info.append(
+        el("p", `${r.findings} exposição(ões) de dados pessoais em ${r.files} arquivo(s), somando ${r.points} pontos (máximo ${r.max_points}).`),
+        el("p", `Alertas ao cidadão: ${data.ai_alerts.ia} escritos pela IA, ${data.ai_alerts.padrao} padrão.`, "muted"),
+      );
+    }
+    info.append(el("div", `pontos = peso do dado × peso do destino × confiança\nRisco = mín(100, pontos ÷ ${r.max_points} × 100)`, "formula"));
+    info.lastChild.style.whiteSpace = "pre-line";
+  }
+
+  function renderRiskBars(boxId, items, key, labels) {
+    const box = document.getElementById(boxId);
+    box.replaceChildren();
+    if (!items.length) { box.append(el("div", "Nenhuma exposição encontrada.", "empty")); return; }
+    const max = Math.max(...items.map(i => i.points), 0.1);
+    items.forEach(i => {
+      const row = el("div", null, "bar-row");
+      const label = el("div", null, "bar-label");
+      label.append(el("span", labels[i[key]] || i[key]), el("span", `${i.count} achado(s) · ${i.points} pts`));
+      const track = el("div", null, "bar-track");
+      const fill = el("div", null, "bar-fill");
+      fill.style.width = `${(i.points / max) * 100}%`;
+      fill.style.background = "#f97316";
+      track.append(fill);
+      row.append(label, track);
+      box.append(row);
+    });
+  }
+
+  function renderRiskTimeline(points) {
+    const box = document.getElementById("risk-timeline");
+    box.replaceChildren();
+    if (!points.length) { box.append(el("div", "Sem scans ainda.", "empty")); return; }
+    const NS = "http://www.w3.org/2000/svg";
+    const W = 600, H = 220, PAD = { l: 40, r: 16, t: 16, b: 34 };
+    const x = i => points.length === 1 ? W / 2 : PAD.l + (i * (W - PAD.l - PAD.r)) / (points.length - 1);
+    const y = v => H - PAD.b - (v / 100) * (H - PAD.t - PAD.b);
+    const mk = (name, attrs) => {
+      const n = document.createElementNS(NS, name);
+      Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+      return n;
+    };
+    const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%" });
+    [0, 25, 50, 75, 100].forEach(v => {
+      svg.append(mk("line", { x1: PAD.l, x2: W - PAD.r, y1: y(v), y2: y(v), stroke: "currentColor", "stroke-opacity": 0.12 }));
+      const t = mk("text", { x: PAD.l - 6, y: y(v) + 4, "text-anchor": "end" });
+      t.textContent = v;
+      svg.append(t);
+    });
+    if (points.length > 1) {
+      svg.append(mk("polyline", {
+        points: points.map((p, i) => `${x(i)},${y(p.risk_score)}`).join(" "),
+        fill: "none", stroke: "#f97316", "stroke-width": 2.5, "stroke-linejoin": "round",
+      }));
+    }
+    points.forEach((p, i) => {
+      const c = mk("circle", { cx: x(i), cy: y(p.risk_score), r: 5, fill: "#f97316" });
+      const title = mk("title", {});
+      title.textContent = `Scan #${p.scan_id} (${p.filename}): risco ${p.risk_score}, ${p.pii_findings} exposição(ões)`;
+      c.append(title);
+      svg.append(c);
+      const v = mk("text", { x: x(i), y: y(p.risk_score) - 9, "text-anchor": "middle" });
+      v.textContent = p.risk_score;
+      svg.append(v);
+      const lbl = mk("text", { x: x(i), y: H - 12, "text-anchor": "middle" });
+      lbl.textContent = `#${p.scan_id}`;
+      svg.append(lbl);
+    });
+    box.append(svg);
+  }
+
+  function renderRiskFindings(rows) {
+    const body = document.getElementById("risk-findings");
+    body.replaceChildren();
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = el("td", "Nenhuma exposição de dados pessoais no estado atual.", "empty");
+      td.colSpan = 6;
+      tr.append(td);
+      body.append(tr);
+      return;
+    }
+    rows.forEach(r => {
+      const cell = (...nodes) => { const td = document.createElement("td"); td.append(...nodes); return td; };
+      const alert = el("div");
+      alert.append(el("strong", r.alert_title || "—"));
+      if (r.alert_risk) alert.append(el("p", r.alert_risk));
+      if (r.alert_action) alert.append(el("p", r.alert_action, "muted"));
+      const src = el("span", r.alert_source === "ia" ? "IA" : "padrão", `badge src-${r.alert_source === "ia" ? "ia" : "padrao"}`);
+      const tr = document.createElement("tr");
+      tr.append(
+        cell(riskBadge(r.level)),
+        cell(String(r.points)),
+        cell(`${TYPE_LABELS[r.pii_type] || r.pii_type} → ${SINK_LABELS[r.sink || "codigo"] || r.sink}`),
+        cell(`${r.filename}:${r.line}`),
+        cell(r.confidence || "—"),
+        cell(alert, src),
+      );
+      body.append(tr);
+    });
+  }
+
+  async function loadRisk() {
+    const res = await fetch("/api/dashboard/citizen-risk");
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    renderRisk(data);
+    renderRiskBars("risk-types", data.by_type, "pii_type", TYPE_LABELS);
+    renderRiskBars("risk-sinks", data.by_sink, "sink", SINK_LABELS);
+    renderRiskTimeline(data.timeline);
+    renderRiskFindings(data.top_findings);
+  }
+
   async function load() {
     const status = document.getElementById("updated");
+    try { await loadRisk(); } catch (err) { status.textContent = "Falha ao carregar o Risco Cidadão"; }
     try {
       const res = await fetch("/api/dashboard/summary");
       if (!res.ok) throw new Error(res.status);
@@ -280,7 +463,7 @@
       renderFindings(data.latest_findings);
       status.textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-BR");
     } catch (err) {
-      status.textContent = "Falha ao carregar os dados";
+      status.textContent = "Falha ao carregar os dados do SAST";
     }
   }
 

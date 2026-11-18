@@ -30,3 +30,34 @@ def risk_level(points: int | None) -> str:
     if points >= 2:
         return "medio"
     return "baixo"
+
+
+# ---------------------------------------------------------------- Risco Cidadão (Etapa 4)
+import os  # noqa: E402
+
+# 30 pontos de exposição ponderados já são o risco máximo (100). Ex.: 3 vazamentos de 9 pontos.
+RISCO_PONTOS_MAXIMOS = float(os.getenv("RISCO_PONTOS_MAXIMOS", "30"))
+# Achado com confiança média (taint passou por função desconhecida) conta pela metade.
+CONFIANCA_PESO = {"alta": 1.0, "media": 0.5}
+
+
+def weighted_points(points, confidence="alta") -> float:
+    """Pontos do achado ponderados pela confiança da detecção."""
+    return (points or 0) * CONFIANCA_PESO.get(confidence, 1.0)
+
+
+def citizen_risk_score(total_points: float) -> int:
+    """Risco Cidadão de 0 a 100: pontos de exposição / pontos máximos, com teto em 100."""
+    return min(100, round(total_points * 100 / RISCO_PONTOS_MAXIMOS))
+
+
+def citizen_risk_level(score: int) -> str:
+    if score <= 0:
+        return "nenhum"
+    if score < 25:
+        return "baixo"
+    if score < 50:
+        return "medio"
+    if score < 75:
+        return "alto"
+    return "critico"

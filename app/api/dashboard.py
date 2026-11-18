@@ -6,12 +6,14 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.api.database import get_db
-from app.api.models import ScanResult
+from app.api.models import ScanResult, ScanRun
+from app.risk import RISCO_PONTOS_MAXIMOS, citizen_risk_level, citizen_risk_score, weighted_points
 
 router = APIRouter()
 
 STATIC_DIR = Path(__file__).parent / "static"
 SEVERITY_ORDER = ["critical", "high", "medium", "low"]
+PII_RULES = {"PII_LEAK", "PII_HARDCODED"}
 
 
 @router.get("/dashboard", include_in_schema=False)
@@ -91,4 +93,79 @@ def dashboard_summary(db: Session = Depends(get_db)):
         "trend": trend,
         "top_files": top_files,
         "latest_findings": latest_findings,
+    }
+
+
+@router.get("/api/dashboard/citizen-risk")
+def citizen_risk(db: Session = Depends(get_db)):
+    """Risco Cidadão (0 a 100) do estado ATUAL: considera só o último scan de cada arquivo.
+
+    pontos do achado = peso do tipo de PII x peso do destino x peso da confiança (app/risk.py).
+    """
+    latest_ids = [rid for (rid,) in db.query(func.max(ScanRun.id)).group_by(ScanRun.filename).all()]
+    rows = []
+    if latest_ids:
+        rows = (
+            db.query(ScanResult)
+            .filter(ScanResult.scan_id.in_(latest_ids), ScanResult.rule_id.in_(PII_RULES))
+            .all()
+        )
+
+    by_type, by_sink = {}, {}
+    total_points, ai_alerts = 0.0, {"ia": 0, "padrao": 0}
+    scored = []
+    for r in rows:
+        pts = weighted_points(r.alert_points, r.confidence)
+        total_points += pts
+        for bucket, key in ((by_type, r.pii_type or "OUTRO"), (by_sink, r.sink or "codigo")):
+            item = bucket.setdefault(key, {"count": 0, "points": 0.0})
+            item["count"] += 1
+            item["points"] += pts
+        ai_alerts[r.alert_source if r.alert_source in ai_alerts else "padrao"] += 1
+        scored.append((pts, r))
+
+    score = citizen_risk_score(total_points)
+    scored.sort(key=lambda t: (-t[0], t[1].filename or "", t[1].line or 0))
+
+    def ranked(bucket, name):
+        return [
+            {name: key, "count": v["count"], "points": round(v["points"], 1)}
+            for key, v in sorted(bucket.items(), key=lambda kv: -kv[1]["points"])
+        ]
+
+    timeline = [
+        {
+            "scan_id": run.id,
+            "filename": run.filename,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+            "risk_score": run.risk_score,
+            "pii_findings": run.pii_findings,
+        }
+        for run in reversed(
+            db.query(ScanRun).filter(ScanRun.risk_score.isnot(None)).order_by(ScanRun.id.desc()).limit(20).all()
+        )
+    ]
+
+    return {
+        "risk": {
+            "score": score,
+            "level": citizen_risk_level(score),
+            "points": round(total_points, 1),
+            "max_points": RISCO_PONTOS_MAXIMOS,
+            "files": len(latest_ids),
+            "findings": len(rows),
+        },
+        "ai_alerts": ai_alerts,
+        "by_type": ranked(by_type, "pii_type"),
+        "by_sink": ranked(by_sink, "sink"),
+        "timeline": timeline,
+        "top_findings": [
+            {
+                "filename": r.filename, "line": r.line, "rule_id": r.rule_id, "pii_type": r.pii_type,
+                "sink": r.sink, "confidence": r.confidence, "points": round(pts, 1), "level": r.alert_level,
+                "alert_title": r.alert_title, "alert_risk": r.alert_risk, "alert_action": r.alert_action,
+                "alert_source": r.alert_source,
+            }
+            for pts, r in scored[:10]
+        ],
     }
