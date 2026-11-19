@@ -30,7 +30,7 @@ Wendell dos Santos Silva - RM558859
 |---|---|
 | Código do novo módulo (regras PII) | Este ZIP: `app/pii/`, `app/engine/pii_taint.py`, `app/engine/rules.py` |
 | Auditoria do protótipo (evidências do taint em ação) | `docs/cyber/evidencias/etapa2-auditoria.txt` e os prints em `docs/cyber/evidencias/` |
-| Dashboard atualizado (vídeo e print do painel gerando o Risco Cidadão) | Prints `01` a `12` e arquivos `.txt` em `docs/cyber/evidencias/` e vídeo (link): 
+| Dashboard atualizado (vídeo e print do painel gerando o Risco Cidadão) | Prints `01` a `12` e arquivos `.txt` em `docs/cyber/evidencias/` e vídeo (link): https://youtu.be/3RtI9Qw4_5c
 
 ## Resultados
 - **Testes:** 120 automatizados (PII, taint, alertas, API e dashboard), todos passando.
